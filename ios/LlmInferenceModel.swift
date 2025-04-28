@@ -29,10 +29,15 @@ final class LlmInferenceModel {
   private lazy var inference: LlmInference! = {
     let llmOptions = LlmInference.Options(modelPath: self.modelPath)
     llmOptions.maxTokens = self.maxTokens
-    llmOptions.topk = self.topK
-    llmOptions.temperature = self.temperature
-    llmOptions.randomSeed = self.randomSeed
     return try? LlmInference(options: llmOptions)
+  }()
+
+  private lazy var session: LlmInference.Session! = {
+    let sessionOptions = LlmInference.Session.Options()
+    sessionOptions.topk = self.topK
+    sessionOptions.temperature = self.temperature
+    sessionOptions.randomSeed = self.randomSeed
+    return try? LlmInference.Session(llmInference: self.inference, options: sessionOptions)
   }()
 
   var handle: Int
@@ -66,13 +71,12 @@ final class LlmInferenceModel {
   ) {
     var result = ""
     do {
-      try self.inference.generateResponseAsync(
-        inputText: prompt,
+      try self.session.addQueryChunk(inputText: prompt)
+      try self.session.generateResponseAsync(
         progress: { partialResponse, error in
           if let error = error {
             self.delegate?.onErrorResponse(
               self, requestId: requestId, error: "Error generating response: \(error)")
-            // should we reject or resolve?
             reject("GENERATE_RESPONSE_ERROR", "Error generating response: \(error)", error)
           } else if let partialResponse = partialResponse {
             self.delegate?.onPartialResponse(self, requestId: requestId, response: partialResponse)
